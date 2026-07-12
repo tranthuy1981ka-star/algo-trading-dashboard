@@ -259,3 +259,35 @@ svg.chart{cursor:crosshair}
   .stats{grid-template-columns:repeat(2,1fr)}
   .hero,.g2,.g3,.g4,.sug-cards{grid-template-columns:1fr}
 }
+
+/* ---------- phones ---------- */
+@media (max-width:560px){
+  .content{padding:14px 12px 44px}
+  .topbar{padding:12px 14px;flex-wrap:wrap;position:static}
+  .topbar h1{font-size:16px}
+  .brand{padding:14px 14px 12px}
+  nav{padding:8px 6px;gap:0}
+  nav .nl{padding:8px 10px;font-size:12.5px;gap:7px}
+  .side-foot{padding:10px;flex-direction:row;align-items:center;gap:8px}
+  .fearmini{padding:8px 10px;flex:1}
+  /* everything multi-column collapses to 2 or 1 */
+  .stats,.metastrip,.g2,.g3,.g4,.cols,.cols2,.sug-cards,.hero{grid-template-columns:1fr 1fr !important}
+  .strat-row{flex-wrap:wrap;gap:8px}
+  .strat-row .mini{gap:11px;font-size:10.5px}
+  .strat-row .ret{font-size:14px}
+  .banner{padding:12px 13px}
+  .banner .bt{font-size:12px}
+  .stat .v{font-size:20px}
+  .metastrip .mt-i .v{font-size:15px}
+  .kval,.stat .v{font-size:19px}
+  /* wide content must scroll inside its box, never push the page sideways */
+  .heat{min-width:460px}
+  .gauge-wrap{gap:14px}
+  h1,.banner .bt,.sect-sub{overflow-wrap:anywhere}
+  .card,.panel{padding:14px 13px}
+}
+@media (max-width:380px){
+  .stats,.metastrip,.cols2,.sug-cards{grid-template-columns:1fr !important}
+}
+/* monthly heatmap always scrolls rather than overflowing on any width */
+.hscroll{overflow-x:auto;-webkit-overflow-scrolling:touch}

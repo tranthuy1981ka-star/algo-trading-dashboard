@@ -462,7 +462,7 @@ function heatmap(monthly){
     const yv=row["Y"];
     g+=`<div class="hc hy" style="background:${color(yv)}" title="${y} full year">${yv!=null?(yv>0?"+":"")+yv.toFixed(0):""}</div>`;
   });
-  return `<div class="heat">${g}</div>`;
+  return `<div class="hscroll"><div class="heat">${g}</div></div>`;
 }
 
 /* ============================================================
