@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Algo Trading — Live Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="loading-screen" id="boot">
+    <div class="big"></div>
+    <div class="msg">Loading market snapshot…</div>
+  </div>
+
+  <div class="app">
+    <!-- ================= SIDEBAR ================= -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo"><span class="mk">◆</span> Quant Desk</div>
+        <div class="tag">Algo Trading System</div>
+      </div>
+      <nav id="nav">
+        <div class="sec">Portfolio</div>
+        <div class="nl active" data-page="overview"><span class="ic">▚</span> Overview</div>
+        <div class="nl" data-page="live"><span class="ic">⚡</span> Forward Test A+B</div>
+        <div class="nl" data-page="strategies"><span class="ic">◉</span> Strategies</div>
+        <div class="nl" data-page="suggestions"><span class="ic">★</span> Suggested Buys</div>
+        <div class="sec">Research</div>
+        <div class="nl" data-page="universe"><span class="ic">▤</span> Universe</div>
+        <div class="nl" data-page="macro"><span class="ic">◍</span> Macro / VIX</div>
+      </nav>
+      <div class="side-foot">
+        <div class="fearmini" id="fearmini">
+          <div class="lbl">Macro Fear</div>
+          <div class="row"><span class="v" id="fmVal">–</span><span class="rg" id="fmReg"></span></div>
+        </div>
+        <button class="icon-btn" id="themeBtn" title="Toggle theme" style="align-self:flex-start">☾</button>
+      </div>
+    </aside>
+
+    <!-- ================= MAIN ================= -->
+    <main>
+      <div class="topbar">
+        <div>
+          <h1 id="pageTitle">Overview</h1>
+          <div class="meta" id="pageMeta">—</div>
+        </div>
+        <div class="right">
+          <span class="meta small" id="freshness"></span>
+          <button class="btn primary" id="refreshBtn">
+            <span class="spin"></span><span class="lbl">↻ Refresh data</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="content">
+        <section class="page active" id="page-overview"></section>
+        <section class="page" id="page-live"></section>
+        <section class="page" id="page-strategies"></section>
+        <section class="page" id="page-suggestions"></section>
+        <section class="page" id="page-universe"></section>
+        <section class="page" id="page-macro"></section>
+      </div>
+    </main>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <div class="chartTip" id="chartTip"></div>
+  <script src="app.js"></script>
+</body>
+</html>

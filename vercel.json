@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/snapshot",
+      "destination": "/data/snapshot.json"
+    },
+    {
+      "source": "/api/live",
+      "destination": "/data/live.json"
+    }
+  ]
+}
