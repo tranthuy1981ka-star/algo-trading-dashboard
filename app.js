@@ -389,7 +389,9 @@ function renderStrategies(){
 function stratDetail(id){
   const s=SNAP.strategies.find(x=>x.id===id),m=s.metrics;
   const traded=Object.keys(s.price_book);
-  return `<div class="panel mt" style="border-left:3px solid var(--accent)">
+  return `${s.caveat?`<div class="panel mt" style="border-left:3px solid var(--warn);background:color-mix(in srgb,var(--warn) 8%,var(--panel))">
+      <div class="small" style="line-height:1.65;color:var(--text)">${esc(s.caveat)}</div></div>`:""}
+    <div class="panel mt" style="border-left:3px solid var(--accent)">
       <div class="eyebrow" style="margin-bottom:8px">How ${esc(s.name)} trades — the rules</div>
       <ol class="ruleslist">${s.rules.map(r=>`<li>${esc(r)}</li>`).join("")}</ol></div>
     ${statTiles(m)}${metaStrip(m)}
