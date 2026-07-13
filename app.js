@@ -722,8 +722,18 @@ async function loadLive(){
   const B=L.paper,A=aV7?(L.paper_a_v7||L.paper_a):L.paper_a,pm=L.premarket,tjl=L.tjl;
   const hedgePnl=(A&&A.hedge)?(A.hedge.account||0):null;
   const cap=SNAP.initial_capital;
-  const aEq=A?A.equity_curve.at(-1)?.equity??A.cash:cap/2;
-  const bEq=B?(B.equity??cap/2):cap/2;
+  // live quotes -> intraday mark-to-market (falls back to entry/last close)
+  const Q=L.quotes||{};
+  const px=s=>Q[s]?.price;
+  const liveVal=bk=>{if(!bk)return null;let v=bk.cash??bk.equity??0,any=false;
+    (bk.open||[]).forEach(p=>{const q=px(p.symbol);v+=p.shares*(q??p.entry);if(q!=null)any=true;});
+    if(bk.hedge)v+=bk.hedge.account||0;return any?Math.round(v*100)/100:null;};
+  const aLive=liveVal(A);
+  const bLive=(B&&B.open&&B.open.length)
+    ?Math.round(((B.equity??cap/2)+B.open.reduce((s,t)=>s+((px(t.symbol)??t.entry)-t.entry)*t.shares,0))*100)/100:null;
+  const qAsof=Object.keys(Q).length?(L.published_at||("ET "+L.now_et)):null;
+  const aEq=aLive??(A?A.equity_curve.at(-1)?.equity??A.cash:cap/2);
+  const bEq=bLive??(B?(B.equity??cap/2):cap/2);
   const total=aEq+bEq, totPnl=total-cap;
   const aTr=A?A.trades:[], bTr=B?B.trades:[];
   const allTr=[...aTr,...bTr], wins=allTr.filter(t=>t.pnl>0).length;
@@ -736,8 +746,8 @@ async function loadLive(){
     <div class="stats" style="grid-template-columns:repeat(4,1fr)">
       <div class="stat"><div class="k">Combined Book</div><div class="v">${fmtUsd(total)}</div><div class="s">start ${fmtUsd(cap)}</div></div>
       <div class="stat"><div class="k">Total P&L</div><div class="v ${cls(totPnl)}">${fmtUsdS(totPnl)}</div><div class="s ${cls(totPnl)}">${pctSigned(totPnl/cap)}</div></div>
-      <div class="stat"><div class="k">Strat A Book</div><div class="v">${fmtUsd(aEq)}</div><div class="s">${A?A.open.length+" open · "+aTr.length+" closed":"starts Monday"}</div></div>
-      <div class="stat"><div class="k">Strat B Book</div><div class="v">${fmtUsd(bEq)}</div><div class="s">${B?B.open.length+" open · "+bTr.length+" closed":"starts Monday"} · win ${allTr.length?(wins/allTr.length*100).toFixed(0)+"%":dash}</div></div>
+      <div class="stat"><div class="k">Strat A Book${aLive!=null?" ⚡":""}</div><div class="v">${fmtUsd(aEq)}</div><div class="s">${A?A.open.length+" open · "+aTr.length+" closed":"starts Monday"}${aLive!=null?" · 市價估值":""}</div></div>
+      <div class="stat"><div class="k">Strat B Book${bLive!=null?" ⚡":""}</div><div class="v">${fmtUsd(bEq)}</div><div class="s">${B?B.open.length+" open · "+bTr.length+" closed":"starts Monday"} · win ${allTr.length?(wins/allTr.length*100).toFixed(0)+"%":dash}</div></div>
     </div>
     <div class="panel mt"><div class="card-head"><div><div class="eyebrow">Forward Equity — A + B combined</div>
       <div class="sect-sub">Real-time paper results, one point per trading day</div></div>
@@ -776,10 +786,14 @@ async function loadLive(){
           <td style="color:var(--accent)">${o.score}</td><td>${o.ref_close!=null?fmtUsd(o.ref_close):dash}</td>
           <td>${o.est_shares!=null?"~"+o.est_shares:dash}</td></tr>`).join("")}</tbody></table></div>`;
     html+= A.open.length
-      ? `<div class="tbl-wrap" style="border:none"><table style="min-width:560px">
-         <thead><tr><th style="text-align:left">Ticker</th><th>Entry Date</th><th>Entry $</th><th>Trail Stop $</th><th>Shares</th><th>Days</th></tr></thead>
-         <tbody>${A.open.map(t=>`<tr><td class="tk" style="text-align:left">${esc(t.symbol)}</td><td>${esc(t.entry_date)}</td>
-           <td>$${t.entry}</td><td class="${t.stop>t.entry?'pos':'neg'}">$${t.stop}</td><td>${t.shares}</td><td>${t.days}</td></tr>`).join("")}</tbody></table></div>`
+      ? `<div class="tbl-wrap" style="border:none"><table style="min-width:680px">
+         <thead><tr><th style="text-align:left">Ticker</th><th>Entry Date</th><th>Entry $</th><th>現價</th><th>賺蝕</th><th>Trail Stop $</th><th>Shares</th><th>Days</th></tr></thead>
+         <tbody>${A.open.map(t=>{const q=px(t.symbol),up=q!=null?(q-t.entry)*t.shares:null;
+           return `<tr><td class="tk" style="text-align:left">${esc(t.symbol)}</td><td>${esc(t.entry_date)}</td>
+           <td>$${t.entry}</td><td>${q!=null?"$"+q:dash}</td>
+           <td class="${up!=null?cls(up):''}">${up!=null?fmtUsdS(up):dash}</td>
+           <td class="${t.stop>t.entry?'pos':'neg'}">$${t.stop}</td><td>${t.shares}</td><td>${t.days}</td></tr>`;}).join("")}</tbody></table></div>`
+        + (qAsof?`<div class="small muted" style="margin-top:6px">現價截至 ${esc(qAsof)}（本地版即時，公開網每次自動 publish 更新）· 未平倉賺蝕合計 <b class="${cls(A.open.reduce((s,t)=>s+((px(t.symbol)??t.entry)-t.entry)*t.shares,0))}">${fmtUsdS(A.open.reduce((s,t)=>s+((px(t.symbol)??t.entry)-t.entry)*t.shares,0))}</b></div>`:"")
       : `<div class="small muted">No open positions.</div>`;
     if(aTr.length)
       html+=`<div class="trades-scroll" style="margin-top:10px"><table style="min-width:600px">
@@ -797,10 +811,13 @@ async function loadLive(){
   html+=`<div class="panel mt"><div class="eyebrow" style="margin-bottom:10px">Strategy B — Trend Join Long day-trades (paper)</div>`;
   if(B&&(bTr.length+B.open.length)>0){
     if(B.open.length)
-      html+=`<div class="tbl-wrap" style="border:none"><table style="min-width:500px">
-        <thead><tr><th style="text-align:left">Ticker</th><th>Entry Time</th><th>Entry $</th><th>Stop $</th><th>Shares</th></tr></thead>
-        <tbody>${B.open.map(t=>`<tr><td class="tk" style="text-align:left">${esc(t.symbol)}</td>
-          <td>${esc(t.entry_time)} ET</td><td>$${t.entry}</td><td class="neg">$${t.stop}</td><td>${t.shares}</td></tr>`).join("")}</tbody></table></div>`;
+      html+=`<div class="tbl-wrap" style="border:none"><table style="min-width:600px">
+        <thead><tr><th style="text-align:left">Ticker</th><th>Entry Time</th><th>Entry $</th><th>現價</th><th>賺蝕</th><th>Stop $</th><th>Shares</th></tr></thead>
+        <tbody>${B.open.map(t=>{const q=px(t.symbol),up=q!=null?(q-t.entry)*t.shares:null;
+          return `<tr><td class="tk" style="text-align:left">${esc(t.symbol)}</td>
+          <td>${esc(t.entry_time)} ET</td><td>$${t.entry}</td><td>${q!=null?"$"+q:dash}</td>
+          <td class="${up!=null?cls(up):''}">${up!=null?fmtUsdS(up):dash}</td>
+          <td class="neg">$${t.stop}</td><td>${t.shares}</td></tr>`;}).join("")}</tbody></table></div>`;
     if(bTr.length)
       html+=`<div class="trades-scroll" style="margin-top:10px"><table style="min-width:560px">
         <thead><tr><th style="text-align:left">Date</th><th style="text-align:left">Ticker</th><th>Entry $</th><th>Exit $</th><th>Shares</th><th>P&L</th><th style="text-align:left">Exit</th></tr></thead>
