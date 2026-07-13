@@ -7,6 +7,10 @@
     {
       "source": "/api/live",
       "destination": "/data/live.json"
+    },
+    {
+      "source": "/api/learnings",
+      "destination": "/data/learnings.json"
     }
   ]
 }

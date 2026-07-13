@@ -654,13 +654,18 @@ function fwdChart(seriesList,{height=240}={}){
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${g}</svg>`;
 }
 
+let _aVar=null;   // which Strategy-A variant the Forward Test page is showing
 async function loadLive(){
   const el=$("#page-live");
   el.innerHTML="<div class='panel muted'>Loading live data…</div>";
   let L=null;
   try{L=await apiGet("live");}
   catch(e){el.innerHTML="<div class='panel muted'>Failed to load live data: "+esc(e.message)+"</div>";return;}
-  const B=L.paper,A=L.paper_a,pm=L.premarket,tjl=L.tjl;
+  if(_aVar===null) _aVar=L.primary_a||"v6";
+  const aV7=(_aVar==="v7");
+  const aName=aV7?"V7 · Market-Hedged":"V6 · Long-Only";
+  const B=L.paper,A=aV7?(L.paper_a_v7||L.paper_a):L.paper_a,pm=L.premarket,tjl=L.tjl;
+  const hedgePnl=(A&&A.hedge)?(A.hedge.account||0):null;
   const cap=SNAP.initial_capital;
   const aEq=A?A.equity_curve.at(-1)?.equity??A.cash:cap/2;
   const bEq=B?(B.equity??cap/2):cap/2;
@@ -693,9 +698,20 @@ async function loadLive(){
             return {date:d,equity:Math.round(la+lb)};});})()}
       ])}</div>`;
 
-  // ---------- Strategy A book ----------
-  html+=`<div class="panel mt"><div class="eyebrow" style="margin-bottom:6px">Strategy A — V6 Alpha Momentum (paper)</div>
-    <div class="sect-sub" style="margin-bottom:12px">Score = composite technical strength 0-100 (from the last daily close). Shares are sized at the actual fill price, so queued counts are estimates.</div>`;
+  // ---------- Strategy A book (V6 / V7 switchable) ----------
+  const segBtn=(v,label,note)=>`<button class="segbtn ${_aVar===v?'on':''}" data-avar="${v}"
+      style="padding:5px 12px;border:1px solid var(--grid);background:${_aVar===v?'var(--accent)':'transparent'};
+      color:${_aVar===v?'#fff':'var(--text)'};cursor:pointer;font-size:12px;border-radius:6px">
+      ${label}${note?` <span style="opacity:.7">${note}</span>`:''}</button>`;
+  html+=`<div class="panel mt"><div class="card-head"><div>
+      <div class="eyebrow" style="margin-bottom:6px">Strategy A — ${esc(aName)} (paper)</div>
+      <div class="sect-sub">Both variants run in parallel on the same signals; V7 adds a short-SPY hedge (0.5× exposure).
+      <b>V7 is the primary</b> — the one to deploy to IB paper. Switch to compare →</div></div>
+      <div id="aVarToggle" style="display:flex;gap:6px;align-items:center">
+        ${segBtn("v6","V6","long-only")}${segBtn("v7","V7","hedged ★")}</div></div>`;
+  if(hedgePnl!=null)
+    html+=`<div class="eyebrow" style="margin:2px 0 10px;color:${hedgePnl>=0?'var(--gain)':'var(--loss)'}">
+      🛡️ 對沖 leg 累計 P&L: ${fmtUsdS(hedgePnl)}（做空 SPY，抵銷大市方向）</div>`;
   if(A){
     if(A.pending&&A.pending.length)
       html+=`<div class="eyebrow" style="margin:4px 0 8px;color:var(--warn)">⏳ Queued for next market open — NOT filled yet</div>
@@ -764,6 +780,84 @@ async function loadLive(){
     html+=`</div>`;
   }
   el.innerHTML=html;
+  // wire the V6/V7 toggle — switch variant and re-render (cheap: re-reads JSON)
+  $$("#aVarToggle .segbtn").forEach(b=>b.onclick=()=>{
+    if(b.dataset.avar!==_aVar){ _aVar=b.dataset.avar; loadLive(); }});
+}
+
+/* ============================================================
+   PAGE: LEARNINGS (self-learning memory — reads /api/learnings)
+   ============================================================ */
+function learnStrategyBlock(s){
+  if(!s.exists)
+    return `<div class="panel mt"><div class="eyebrow" style="margin-bottom:6px">${esc(s.name)}</div>
+      <div class="small muted">未有交易紀錄 — 開始 forward test 就會開始學。</div></div>`;
+  const buckets=s.buckets||{}, keys=Object.keys(buckets).sort();
+  const cds=s.cooldowns||{}, cdKeys=Object.keys(cds);
+  const ms=s.min_sample;
+  let html=`<div class="panel mt"><div class="card-head"><div>
+    <div class="eyebrow">${esc(s.name)}</div>
+    <div class="sect-sub">已平倉 ${s.closed_trades||0} 單 · 分桶方式：${esc(s.bucket_by||"setup")} · 每桶需 ${ms} 單先可判斷</div>
+    </div></div>`;
+  if(!keys.length){
+    html+=`<div class="small muted" style="margin-top:8px">仲未夠已平倉交易去學習 — 繼續跑，桶滿 ${ms} 單就會出現期望值同建議。</div></div>`;
+    return html;
+  }
+  // bucket table: n / win% / expectancy(R) / verdict
+  html+=`<div class="tbl-wrap" style="border:none;margin-top:10px"><table style="min-width:520px">
+    <thead><tr><th style="text-align:left">Setup 桶</th><th>樣本 n</th><th>勝率</th><th>期望 (R)</th><th style="text-align:left">狀態</th></tr></thead><tbody>`;
+  keys.forEach(k=>{
+    const d=buckets[k], n=d.n, wr=(d.win_rate*100), er=d.expectancy_r;
+    const enough=n>=ms, blocked=enough&&er<=s.block_expectancy_r;
+    const tag=blocked?`<span class="rz stop_loss">避開</span>`
+      :enough?`<span class="rz trail_stop">可續做</span>`
+      :`<span class="rz time_exit">樣本未夠 ${n}/${ms}</span>`;
+    html+=`<tr><td class="tk" style="text-align:left">${esc(k)}</td>
+      <td>${n}</td><td>${wr.toFixed(0)}%</td>
+      <td class="${cls(er)}">${er>=0?"+":""}${er.toFixed(2)}R</td>
+      <td style="text-align:left">${tag}</td></tr>`;
+  });
+  html+=`</tbody></table></div>`;
+  // cooldowns
+  if(cdKeys.length){
+    html+=`<div class="eyebrow" style="margin:14px 0 6px;color:var(--warn)">🧊 冷靜中（近期淨蝕，暫停買入）</div>
+      <div class="sug-cards">${cdKeys.map(sym=>{const c=cds[sym];
+        return `<div class="sug"><div class="top"><div><div class="tkr">${esc(sym)}</div>
+          <div class="px ${cls(c.expectancy_r)}">${c.expectancy_r>=0?"+":""}${(+c.expectancy_r).toFixed(2)}R</div></div>
+          <span class="pill" style="background:var(--warn);color:#000">HELD</span></div>
+          <div class="why">${c.n} 單 · 冷靜至 ${esc(String(c.until))}</div></div>`;}).join("")}</div>`;
+  }
+  // plain-language lessons
+  const lessons=(s.lessons||[]).filter(l=>/^[❌🧊]/.test(l));
+  if(lessons.length){
+    html+=`<div class="eyebrow" style="margin:14px 0 6px">📓 教訓（自動寫入 learnings 檔）</div>
+      <ul class="small" style="margin:0;padding-left:18px;line-height:1.8">
+      ${lessons.map(l=>`<li>${esc(l)}</li>`).join("")}</ul>`;
+  }
+  html+=`</div>`;
+  return html;
+}
+
+async function loadLearn(){
+  const el=$("#page-learn");
+  el.innerHTML="<div class='panel muted'>Loading learnings…</div>";
+  let D=null;
+  try{D=await apiGet("learnings");}
+  catch(e){el.innerHTML="<div class='panel muted'>Failed to load learnings: "+esc(e.message)+"</div>";return;}
+  const modeOn=D.mode==="block";
+  const modeColor=modeOn?"var(--gain)":"var(--warn)";
+  const modeText=modeOn
+    ?"BLOCK 模式：過往同類蝕錢嘅 setup / 冷靜中嘅股票，會被<b>真正略過</b>唔開新倉。"
+    :"SHADOW 模式：只會<b>記錄</b>「本應略過邊單」，但唔會真係略過（先觀察，之後改 config 轉 block）。";
+  let html=`<div class="banner" style="border-left-color:${modeColor}">
+    <div class="bv" style="color:${modeColor};font-size:18px">🧠</div>
+    <div class="bt"><b>Self-Learning Memory</b> — 每次落單前，策略會查返自己<b>已平倉</b>嘅交易紀錄，
+    邊類 setup 長期蝕錢就避開，邊隻股近期連蝕就入冷靜期。純用過去已完成嘅交易 → 冇 look-ahead。
+    <br>${modeText}
+    <br><span class="small muted">門檻：每個 setup 桶要夠 ${D.min_sample} 單、期望值 ≤ ${D.block_expectancy_r}R 先會被判「避開」。桶未夠數 = gate 不動，行為同以前一樣。</span></div></div>`;
+  const S=D.strategies||{};
+  ["a","b"].forEach(k=>{ if(S[k]) html+=learnStrategyBlock(S[k]); });
+  el.innerHTML=html;
 }
 
 /* ============================================================
@@ -771,6 +865,7 @@ async function loadLive(){
    ============================================================ */
 const titles={overview:["Overview","Portfolio scorecard & best variant"],
   live:["Forward Test A+B","Real-time paper trading — no hindsight"],
+  learn:["Learnings","How the bots learn from their own trades"],
   strategies:["Strategies","Tearsheets, trade logs & explorer"],
   suggestions:["Suggested Buys","Live picks by holding horizon"],
   universe:["Universe","Fundamentals & live scores"],
@@ -780,6 +875,7 @@ $$("#nav .nl").forEach(nl=>nl.onclick=()=>{const p=nl.dataset.page;
   $$(".page").forEach(x=>x.classList.remove("active"));$("#page-"+p).classList.add("active");
   $("#pageTitle").textContent=titles[p][0];$("#pageMeta").textContent=titles[p][1];
   if(p==="live")loadLive();
+  if(p==="learn")loadLearn();
   try{history.replaceState(null,"","#"+p);}catch(e){}});
 
 // deep link: opening the dashboard at .../#live jumps straight to Forward Test
