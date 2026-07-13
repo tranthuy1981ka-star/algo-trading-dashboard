@@ -376,6 +376,7 @@ function renderStrategies(){
       <div class="strat-detail" id="detail-${s.id}"></div></div>`;
   }).join("");
   $("#page-strategies").innerHTML=`
+    <div id="fwdPin"></div>
     <div class="eyebrow">Strategy A — Composite Scoring · variants</div>
     <div class="sect-sub" style="margin-bottom:16px">Same signal engine, two risk/hold configs (V4 is the live production build). Click to expand full tearsheet, trade log & candlestick trade explorer. Daily bars, ${SNAP.period.start} → ${SNAP.period.end}.</div>
     <div class="strat-list">${rows}</div>`;
@@ -385,6 +386,42 @@ function renderStrategies(){
     $$(".strat-row").forEach(x=>x.classList.remove("open"));
     if(!open){d.innerHTML=stratDetail(id);d.classList.add("open");r.classList.add("open");wireCharts();wireExplorer(id);}
   });
+  renderFwdPin();
+}
+
+/* Pinned highlight box at the top of Strategies: which strategy is LIVE in
+   forward-test right now, plus a live P&L peek (click -> Forward Test page). */
+async function renderFwdPin(){
+  const el=$("#fwdPin");
+  if(!el)return;
+  el.innerHTML=`<div class="panel mt" style="border:2px solid var(--accent)">
+    <div class="small muted">載入緊 Forward Test 狀態…</div></div>`;
+  let L=null;
+  try{L=await apiGet("live");}catch(e){el.innerHTML="";return;}
+  const cap=SNAP.initial_capital,half=cap/2;
+  const A=L.paper_a,B=L.paper;
+  const aEq=A?(A.equity_curve&&A.equity_curve.length?A.equity_curve.at(-1).equity:(A.cash??half)):half;
+  const bEq=B?(B.equity??half):half;
+  const tot=aEq+bEq,totPnl=tot-cap;
+  const aName=(SNAP.strategies.find(s=>s.deployed&&s.engine!=="daytrade")||{}).name
+             ||SNAP.deployed_names.filter(n=>n!=="Gap & Go Day-Trade").join(" + ")||"V6";
+  const started=(A&&A.equity_curve&&A.equity_curve[0])?A.equity_curve[0].date:null;
+  el.innerHTML=`<div class="panel mt" id="fwdPinBox" style="border:2px solid var(--accent);background:var(--accent-dim);cursor:pointer">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+      <div>
+        <div class="eyebrow" style="color:var(--accent)">🔴 而家跑緊 Forward Test（真實市場，紙上倉）</div>
+        <div class="small" style="margin-top:5px;line-height:1.5">
+          <b style="color:var(--text)">策略A</b>（${esc(aName)}，波段）＋
+          <b style="color:var(--text)">策略B</b>（Trend Join Long，日內）
+          ${started?` · 由 ${esc(started)} 開始`:""} · 撳呢個box去 <b>Forward Test A+B</b> 頁睇齊細節</div>
+      </div>
+      <div style="text-align:right">
+        <div class="num" style="font-size:24px;font-weight:700;color:${totPnl>=0?'var(--gain)':'var(--loss)'}">${fmtUsdS(totPnl)}</div>
+        <div class="small muted">戶口 ${fmtUsd(tot)}（A ${fmtUsd(aEq)} · B ${fmtUsd(bEq)}）</div>
+      </div>
+    </div></div>`;
+  const box=$("#fwdPinBox");
+  if(box)box.onclick=()=>document.querySelector('.nl[data-page="live"]').click();
 }
 function stratDetail(id){
   const s=SNAP.strategies.find(x=>x.id===id),m=s.metrics;
