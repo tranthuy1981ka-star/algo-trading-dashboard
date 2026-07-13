@@ -312,6 +312,60 @@ function metaStrip(m){
     <div class="v">${it[1]}</div><div class="sub">${it[2]}</div></div>`).join("")}</div>`;
 }
 
+/* ---------- PM risk panel: the numbers a fund manager reads daily ---------- */
+function pmPanel(m){
+  if(m.var95==null && m.up_capture==null) return "";   // old snapshot — hide
+  const items=[
+    ["Up Capture",m.up_capture==null?dash:pct(m.up_capture),"SPY升市日食幾多 (>100%好)"],
+    ["Down Capture",m.down_capture==null?dash:pct(m.down_capture),"SPY跌市日捱幾多 (<100%好)"],
+    ["VaR 95%",m.var95==null?dash:"-"+pct(m.var95),"單日95%情況蝕唔過呢個數"],
+    ["CVaR 95%",m.cvar95==null?dash:"-"+pct(m.cvar95),"最差嗰5%日子嘅平均蝕幅"],
+    ["Payoff",m.payoff==null?dash:n2(m.payoff,2),"平均贏 ÷ 平均輸"],
+    ["Best Day",pctSigned(m.best_day),""],
+    ["Worst Day",pctSigned(m.worst_day),""],
+    ["Skew",m.skew==null?dash:n2(m.skew,2),"負=大跌尾巴風險"],
+    ["Tail Ratio",m.tail_ratio==null?dash:n2(m.tail_ratio,2),">1=賺尾大過蝕尾"],
+  ];
+  return `<div class="panel mt"><div class="eyebrow" style="margin-bottom:4px">PM Risk Panel — 基金經理日常睇嘅風險數</div>
+    <div class="sect-sub" style="margin-bottom:10px">Capture 係同 SPY 比：理想係升市食足、跌市縮沙。VaR/CVaR 係「平常最多蝕幾多」嘅統計底線。</div>
+    <div class="metastrip">${items.map(it=>`<div class="mt-i"><div class="k">${it[0]}</div>
+      <div class="v">${it[1]}</div><div class="sub">${it[2]}</div></div>`).join("")}</div></div>`;
+}
+
+/* ---------- P&L attribution: who made / who lost the money ---------- */
+function attribPanel(s){
+  const a=s.attribution;
+  if(!a||!a.top||!a.top.length) return "";
+  const row=r=>`<tr><td class="tk" style="text-align:left">${esc(r.ticker)}</td>
+    <td class="${cls(r.pnl)}">${fmtUsdS(r.pnl)}</td><td class="muted">${r.trades}</td></tr>`;
+  return `<div class="grid g2 mt">
+    <div class="panel"><div class="eyebrow">Top Contributors 💰</div>
+      <div class="sect-sub" style="margin-bottom:8px">邊隻股賺最多（淨P&L / 單數）</div>
+      <table style="width:100%"><thead><tr><th style="text-align:left">Ticker</th><th>Net P&L</th><th>Trades</th></tr></thead>
+      <tbody>${a.top.map(row).join("")}</tbody></table></div>
+    <div class="panel"><div class="eyebrow">Top Detractors 🔻</div>
+      <div class="sect-sub" style="margin-bottom:8px">邊隻股蝕最多——PM 每週必問嘅問題</div>
+      <table style="width:100%"><thead><tr><th style="text-align:left">Ticker</th><th>Net P&L</th><th>Trades</th></tr></thead>
+      <tbody>${a.bottom.map(row).join("")}</tbody></table></div></div>`;
+}
+
+/* ---------- correlation matrix: the multi-strategy (JGF) lens ---------- */
+function corrPanel(){
+  const C=SNAP.correlation;
+  if(!C||!C.labels||C.labels.length<2) return "";
+  const cell=v=>{
+    const a=Math.min(Math.abs(v),1);
+    const bg=v>=0.75?`rgba(220,80,80,${0.15+a*0.35})`:v>=0.4?`rgba(220,160,60,${0.1+a*0.3})`:`rgba(80,180,120,${0.12+(1-a)*0.25})`;
+    return `<td style="background:${bg};text-align:center">${v.toFixed(2)}</td>`;};
+  return `<div class="panel mt"><div class="eyebrow" style="margin-bottom:4px">Strategy Correlation Matrix — 多策略基金嘅核心視角</div>
+    <div class="sect-sub" style="margin-bottom:10px">JGF 呢類 multi-strategy fund 嘅秘密唔係單一勁策略，而係揸住一批「唔會一齊跌」嘅策略。
+    紅 = 高相關（一齊upside但都一齊冧）· 綠 = 低/負相關（真正分散）。你嘅目標：加入同 V6 相關低嘅新 sleeve。</div>
+    <div class="tbl-wrap" style="border:none;overflow-x:auto"><table style="min-width:420px">
+      <thead><tr><th></th>${C.labels.map(l=>`<th>${esc(l)}</th>`).join("")}</tr></thead>
+      <tbody>${C.matrix.map((row,i)=>`<tr><td class="tk" style="text-align:left">${esc(C.labels[i])}</td>${row.map(cell).join("")}</tr>`).join("")}</tbody>
+    </table></div></div>`;
+}
+
 /* ============================================================
    OVERVIEW
    ============================================================ */
@@ -377,6 +431,7 @@ function renderStrategies(){
   }).join("");
   $("#page-strategies").innerHTML=`
     <div id="fwdPin"></div>
+    ${corrPanel()}
     <div class="eyebrow">Strategy A — Composite Scoring · variants</div>
     <div class="sect-sub" style="margin-bottom:16px">Same signal engine, two risk/hold configs (V4 is the live production build). Click to expand full tearsheet, trade log & candlestick trade explorer. Daily bars, ${SNAP.period.start} → ${SNAP.period.end}.</div>
     <div class="strat-list">${rows}</div>`;
@@ -431,7 +486,7 @@ function stratDetail(id){
     <div class="panel mt" style="border-left:3px solid var(--accent)">
       <div class="eyebrow" style="margin-bottom:8px">How ${esc(s.name)} trades — the rules</div>
       <ol class="ruleslist">${s.rules.map(r=>`<li>${esc(r)}</li>`).join("")}</ol></div>
-    ${statTiles(m)}${metaStrip(m)}
+    ${statTiles(m)}${metaStrip(m)}${pmPanel(m)}${attribPanel(s)}
     <div class="panel mt">
       <div class="card-head"><div><div class="eyebrow">Portfolio Equity · weekly candles</div><div class="sect-sub">Book value vs SPY & QQQ · hover for OHLC</div></div>
         <div class="legend"><span><i class="swatch" style="background:var(--gain)"></i> Up</span><span><i class="swatch" style="background:var(--loss)"></i> Down</span><span><i class="swatch" style="background:var(--faint)"></i> SPY</span><span><i class="swatch" style="background:var(--accent2)"></i> QQQ</span></div></div>
