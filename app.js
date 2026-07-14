@@ -720,6 +720,7 @@ async function loadLive(){
   const aV7=(_aVar==="v7");
   const aName=aV7?"V7 · Market-Hedged":"V6 · Long-Only";
   const B=L.paper,A=aV7?(L.paper_a_v7||L.paper_a):L.paper_a,pm=L.premarket,tjl=L.tjl;
+  const N=L.paper_n;
   const hedgePnl=(A&&A.hedge)?(A.hedge.account||0):null;
   const cap=SNAP.initial_capital;
   // live quotes -> intraday mark-to-market (falls back to entry/last close)
@@ -753,10 +754,12 @@ async function loadLive(){
       <div class="sect-sub">Real-time paper results, one point per trading day</div></div>
       <div class="legend"><span><i class="swatch" style="background:var(--accent)"></i> A+B</span>
         <span><i class="swatch" style="background:var(--gain)"></i> A (swing)</span>
-        <span><i class="swatch" style="background:var(--accent2)"></i> B (day-trade)</span></div></div>
+        <span><i class="swatch" style="background:var(--accent2)"></i> B (day-trade)</span>
+        ${N?`<span><i class="swatch" style="background:var(--warn)"></i> N (中性·實驗)</span>`:""}</div></div>
       ${fwdChart([
         {label:"A",color:"var(--gain)",curve:A?A.equity_curve:[]},
         {label:"B",color:"var(--accent2)",dash:"4 3",curve:(B&&B.equity_curve)?B.equity_curve:[]},
+        ...(N&&N.equity_curve?[{label:"N",color:"var(--warn)",dash:"2 2",curve:N.equity_curve}]:[]),
         {label:"A+B",color:"var(--accent)",curve:(()=>{const ac=A?A.equity_curve:[],bc=(B&&B.equity_curve)?B.equity_curve:[];
           const ds=[...new Set([...ac,...bc].map(p=>p.date))].sort();let la=cap/2,lb=cap/2;
           return ds.map(d=>{la=(ac.find(p=>p.date===d)||{}).equity??la;lb=(bc.find(p=>p.date===d)||{}).equity??lb;
@@ -829,6 +832,29 @@ async function loadLive(){
     html+=`<div class="small muted">No day-trades yet — B only fires when a qualifying gapper breaks out (~0-3/week on this pool). Test: <b style="color:var(--text)">python main.py scan-tjl --force</b></div>`;
   }
   html+=`</div>`;
+
+  // ---------- Strategy N book (market-neutral experiment) ----------
+  if(N){
+    const nEq=N.equity_curve?.at(-1)?.equity??N.equity??cap/2, nPnl=nEq-(N.start_capital??cap/2);
+    const lastReb=(N.rebalances||[]).at(-1);
+    html+=`<div class="panel mt" style="border-left:3px solid var(--warn)">
+      <div class="eyebrow" style="margin-bottom:4px">🧬 Strategy N — Market-Neutral（實驗 · 一個月試跑）</div>
+      <div class="sect-sub" style="margin-bottom:12px">做多 top-8 高分股（等權）− 沽 SPY 對沖 → 唔賭大市方向，只賭選股相對強弱。
+      研究顯示同 V6 相關 ≈ 0，溝落組合可提升 Sharpe。<b>實驗中，未落真錢。</b></div>
+      <div class="stats" style="grid-template-columns:repeat(3,1fr);margin-bottom:12px">
+        <div class="stat"><div class="k">N 戶口（市場中性）</div><div class="v">${fmtUsd(nEq)}</div><div class="s ${cls(nPnl)}">${fmtUsdS(nPnl)}</div></div>
+        <div class="stat"><div class="k">持倉</div><div class="v" style="font-size:15px">${(N.longs||[]).length} 隻等權</div><div class="s">每週換倉</div></div>
+        <div class="stat"><div class="k">對沖</div><div class="v" style="font-size:15px">沽 SPY</div><div class="s">dollar-neutral</div></div>
+      </div>`;
+    if(N.longs&&N.longs.length)
+      html+=`<div class="eyebrow" style="margin:2px 0 6px">本週做多籃子（等權）</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">${N.longs.map(s=>{const q=px(s);
+          return `<span class="tk" style="padding:4px 9px;border:1px solid var(--grid);border-radius:6px;font-size:12px">${esc(s)}${q!=null?` <span class="muted">$${q}</span>`:""}</span>`;}).join("")}
+        <span class="tk" style="padding:4px 9px;border:1px solid var(--loss);border-radius:6px;font-size:12px;color:var(--loss)">− SPY 對沖</span></div>`;
+    if(lastReb)
+      html+=`<div class="small muted">最近換倉 ${esc(lastReb.date)}${lastReb.added?.length?" · 新增 "+lastReb.added.join("、"):""}${lastReb.removed?.length?" · 剔除 "+lastReb.removed.join("、"):""}</div>`;
+    html+=`</div>`;
+  }
 
   if(tjl){
     html+=`<div class="panel mt"><div class="eyebrow" style="margin-bottom:6px">Latest TJL Scan</div>
