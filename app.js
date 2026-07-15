@@ -750,11 +750,13 @@ async function loadLive(){
       <div class="sect-sub">Real-time paper results, one point per trading day</div></div>
       <div class="legend"><span><i class="swatch" style="background:var(--gain)"></i> A（${esc(aName.split(" ")[0])}）</span>
         ${N?`<span><i class="swatch" style="background:var(--warn)"></i> N (中性·實驗)</span>`:""}
-        ${T?`<span><i class="swatch" style="background:#c084fc"></i> T (趨勢·實驗)</span>`:""}</div></div>
+        ${T?`<span><i class="swatch" style="background:#c084fc"></i> T (趨勢·實驗)</span>`:""}
+        ${L.paper?`<span><i class="swatch" style="background:var(--accent2)"></i> B2 (日內ORB)</span>`:""}</div></div>
       ${fwdChart([
         {label:"A",color:"var(--gain)",curve:A?A.equity_curve:[]},
         ...(N&&N.equity_curve?[{label:"N",color:"var(--warn)",dash:"2 2",curve:N.equity_curve}]:[]),
         ...(T&&T.equity_curve?[{label:"T",color:"#c084fc",dash:"6 3",curve:T.equity_curve}]:[]),
+        ...(L.paper&&L.paper.equity_curve?[{label:"B2",color:"var(--accent2)",dash:"4 3",curve:L.paper.equity_curve}]:[]),
       ])}</div>`;
 
   // ---------- Strategy A book (V6 / V7 switchable) ----------
@@ -868,6 +870,37 @@ async function loadLive(){
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:6px">${longs.map(([k,v])=>chip(k,v)).join("")}${shorts.map(([k,v])=>chip(k,v)).join("")}</div>
     </div>`;
+  }
+
+  // ---------- Strategy B2 book (Opening Range Breakout, 5-min intraday) ----------
+  const B2=L.paper;
+  if(B2){
+    const b2Eq=B2.equity_curve?.at(-1)?.equity??B2.equity??cap/2, b2Pnl=b2Eq-(B2.start_capital??cap/2);
+    const b2Tr=B2.trades||[], b2Wins=b2Tr.filter(t=>t.pnl>0).length;
+    html+=`<div class="panel mt" style="border-left:3px solid var(--accent2)">
+      <div class="eyebrow" style="margin-bottom:4px">⚡ Strategy B2 — Opening Range Breakout（5分鐘日內）</div>
+      <div class="sect-sub" style="margin-bottom:12px">高beta movers · 只交易「相對成交量≥3x」嘅 in-play 股 · 突破開市首5分鐘高位做多 · 2R目標 · 收市必平。
+      3年5分鐘真數據回測 PF 1.27、3/4年正、~4單/週。<b>取代已下架嘅日內 B，實盤驗證中。</b></div>
+      <div class="stats" style="grid-template-columns:repeat(3,1fr);margin-bottom:12px">
+        <div class="stat"><div class="k">B2 戶口</div><div class="v">${fmtUsd(b2Eq)}</div><div class="s ${cls(b2Pnl)}">${fmtUsdS(b2Pnl)}</div></div>
+        <div class="stat"><div class="k">持倉</div><div class="v" style="font-size:15px">${B2.open?.length||0} 隻</div><div class="s">日內·收市平</div></div>
+        <div class="stat"><div class="k">累計</div><div class="v" style="font-size:15px">${b2Tr.length?(b2Wins/b2Tr.length*100).toFixed(0)+"% 勝":"—"}</div><div class="s">${b2Tr.length} 單</div></div>
+      </div>`;
+    if(B2.open&&B2.open.length)
+      html+=`<div class="tbl-wrap" style="border:none"><table style="min-width:620px">
+        <thead><tr><th style="text-align:left">Ticker</th><th>入場時間</th><th>入場$</th><th>現價</th><th>止蝕</th><th>2R目標</th><th>rvol</th></tr></thead>
+        <tbody>${B2.open.map(t=>{const q=px(t.symbol);return `<tr><td class="tk" style="text-align:left">${esc(t.symbol)}</td>
+          <td>${esc(t.entry_time)} ET</td><td>$${t.entry}</td><td>${q!=null?"$"+q:dash}</td>
+          <td class="neg">$${t.stop}</td><td class="pos">$${t.target}</td><td>${t.rvol}x</td></tr>`;}).join("")}</tbody></table></div>`;
+    if(b2Tr.length)
+      html+=`<div class="trades-scroll" style="margin-top:10px"><table style="min-width:560px">
+        <thead><tr><th style="text-align:left">日期</th><th style="text-align:left">Ticker</th><th>入$</th><th>出$</th><th>P&L</th><th style="text-align:left">離場</th></tr></thead>
+        <tbody>${[...b2Tr].reverse().slice(0,30).map(t=>`<tr><td style="text-align:left">${esc(t.date)}</td>
+          <td class="tk" style="text-align:left">${esc(t.symbol)}</td><td>$${t.entry}</td><td>$${t.exit}</td>
+          <td class="${cls(t.pnl)}">${fmtUsdS(t.pnl)}</td><td style="text-align:left">${esc(t.reason||"")}</td></tr>`).join("")}</tbody></table></div>`;
+    else if(!(B2.open&&B2.open.length))
+      html+=`<div class="small muted">未有交易 — B2 只喺開市後、有股票成交量爆升(rvol≥3)兼突破開市高位先入場（~4單/週）。今晚美股時段自動掃描。</div>`;
+    html+=`</div>`;
   }
 
   el.innerHTML=html;
