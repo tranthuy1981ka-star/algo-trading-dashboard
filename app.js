@@ -454,25 +454,21 @@ async function renderFwdPin(){
   let L=null;
   try{L=await apiGet("live");}catch(e){el.innerHTML="";return;}
   const cap=SNAP.initial_capital,half=cap/2;
-  const A=L.paper_a,B=L.paper;
+  const A=L.paper_a7||L.paper_a_v7||L.paper_a;
   const aEq=A?(A.equity_curve&&A.equity_curve.length?A.equity_curve.at(-1).equity:(A.cash??half)):half;
-  const bEq=B?(B.equity??half):half;
-  const tot=aEq+bEq,totPnl=tot-cap;
-  const aName=(SNAP.strategies.find(s=>s.deployed&&s.engine!=="daytrade")||{}).name
-             ||SNAP.deployed_names.filter(n=>n!=="Gap & Go Day-Trade").join(" + ")||"V6";
+  const aPnl=aEq-half;
   const started=(A&&A.equity_curve&&A.equity_curve[0])?A.equity_curve[0].date:null;
   el.innerHTML=`<div class="panel mt" id="fwdPinBox" style="border:2px solid var(--accent);background:var(--accent-dim);cursor:pointer">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
       <div>
         <div class="eyebrow" style="color:var(--accent)">🔴 而家跑緊 Forward Test（真實市場，紙上倉）</div>
         <div class="small" style="margin-top:5px;line-height:1.5">
-          <b style="color:var(--text)">策略A</b>（${esc(aName)}，波段）＋
-          <b style="color:var(--text)">策略B</b>（Trend Join Long，日內）
-          ${started?` · 由 ${esc(started)} 開始`:""} · 撳呢個box去 <b>Forward Test A+B</b> 頁睇齊細節</div>
+          <b style="color:var(--text)">A</b>（V7 半對沖，波段）＋ <b>N</b>（市場中性）＋ <b>T</b>（跨資產趨勢）實驗中
+          ${started?` · 由 ${esc(started)} 開始`:""} · 撳去 <b>Forward Test</b> 頁睇齊細節</div>
       </div>
       <div style="text-align:right">
-        <div class="num" style="font-size:24px;font-weight:700;color:${totPnl>=0?'var(--gain)':'var(--loss)'}">${fmtUsdS(totPnl)}</div>
-        <div class="small muted">戶口 ${fmtUsd(tot)}（A ${fmtUsd(aEq)} · B ${fmtUsd(bEq)}）</div>
+        <div class="num" style="font-size:24px;font-weight:700;color:${aPnl>=0?'var(--gain)':'var(--loss)'}">${fmtUsdS(aPnl)}</div>
+        <div class="small muted">A 戶口 ${fmtUsd(aEq)}</div>
       </div>
     </div></div>`;
   const box=$("#fwdPinBox");
@@ -720,7 +716,7 @@ async function loadLive(){
   const aV7=(_aVar==="v7");
   const aName=aV7?"V7 · Market-Hedged":"V6 · Long-Only";
   const B=L.paper,A=aV7?(L.paper_a_v7||L.paper_a):L.paper_a,pm=L.premarket,tjl=L.tjl;
-  const N=L.paper_n;
+  const N=L.paper_n,T=L.paper_t;
   const hedgePnl=(A&&A.hedge)?(A.hedge.account||0):null;
   const cap=SNAP.initial_capital;
   // live quotes -> intraday mark-to-market (falls back to entry/last close)
@@ -741,29 +737,24 @@ async function loadLive(){
 
   let html=`<div class="banner" style="border-left-color:var(--accent)">
     <div class="bv" style="color:var(--accent);font-size:18px">FWD</div>
-    <div class="bt"><b>Forward Test — Strategy A + B, live paper money</b> (started 2026-07-13, $${(cap/2).toLocaleString()} per book).
-    ET now: <b>${esc(L.now_et)}</b>. A trades daily at the open/close cycle; B day-trades 10:00-15:30 ET; all fills alert your WhatsApp.
-    Unlike the Overview page (which is A's 3.5-year BACKTEST), everything here happened in real time — no hindsight.</div></div>
+    <div class="bt"><b>Forward Test — 多 sleeve 實盤紙上交易</b>（started 2026-07-13）。
+    ET now: <b>${esc(L.now_et)}</b>。A（波段）每日跑；N（市場中性）、T（跨資產趨勢）係實驗 sleeve。所有成交 WhatsApp 通知。
+    <br><span class="small muted">Strategy B（日內 TJL）3年真數據證實只係邊緣貨，已下架；B2（Opening Range Breakout）研發中。</span></div></div>
     <div class="stats" style="grid-template-columns:repeat(4,1fr)">
-      <div class="stat"><div class="k">Combined Book</div><div class="v">${fmtUsd(total)}</div><div class="s">start ${fmtUsd(cap)}</div></div>
-      <div class="stat"><div class="k">Total P&L</div><div class="v ${cls(totPnl)}">${fmtUsdS(totPnl)}</div><div class="s ${cls(totPnl)}">${pctSigned(totPnl/cap)}</div></div>
-      <div class="stat"><div class="k">Strat A Book${aLive!=null?" ⚡":""}</div><div class="v">${fmtUsd(aEq)}</div><div class="s">${A?A.open.length+" open · "+aTr.length+" closed":"starts Monday"}${aLive!=null?" · 市價估值":""}</div></div>
-      <div class="stat"><div class="k">Strat B Book${bLive!=null?" ⚡":""}</div><div class="v">${fmtUsd(bEq)}</div><div class="s">${B?B.open.length+" open · "+bTr.length+" closed":"starts Monday"} · win ${allTr.length?(wins/allTr.length*100).toFixed(0)+"%":dash}</div></div>
+      <div class="stat"><div class="k">A 戶口（主·${esc(aName.split(" ")[0])}）${aLive!=null?" ⚡":""}</div><div class="v">${fmtUsd(aEq)}</div><div class="s ${cls(aEq-cap/2)}">${fmtUsdS(aEq-cap/2)}${aLive!=null?" · 市價估值":""}</div></div>
+      <div class="stat"><div class="k">A 持倉</div><div class="v" style="font-size:16px">${A?A.open.length+" 隻":"—"}</div><div class="s">${A?aTr.length+" 已平倉":""}</div></div>
+      <div class="stat"><div class="k">N 中性（實驗）</div><div class="v">${N?fmtUsd(N.equity_curve?.at(-1)?.equity??N.equity??cap/2):dash}</div><div class="s">market-neutral</div></div>
+      <div class="stat"><div class="k">T 趨勢（實驗）</div><div class="v">${T?fmtUsd(T.equity_curve?.at(-1)?.equity??T.equity??cap/2):dash}</div><div class="s">危機保險</div></div>
     </div>
-    <div class="panel mt"><div class="card-head"><div><div class="eyebrow">Forward Equity — A + B combined</div>
+    <div class="panel mt"><div class="card-head"><div><div class="eyebrow">Forward Equity — 各 sleeve 並排</div>
       <div class="sect-sub">Real-time paper results, one point per trading day</div></div>
-      <div class="legend"><span><i class="swatch" style="background:var(--accent)"></i> A+B</span>
-        <span><i class="swatch" style="background:var(--gain)"></i> A (swing)</span>
-        <span><i class="swatch" style="background:var(--accent2)"></i> B (day-trade)</span>
-        ${N?`<span><i class="swatch" style="background:var(--warn)"></i> N (中性·實驗)</span>`:""}</div></div>
+      <div class="legend"><span><i class="swatch" style="background:var(--gain)"></i> A（${esc(aName.split(" ")[0])}）</span>
+        ${N?`<span><i class="swatch" style="background:var(--warn)"></i> N (中性·實驗)</span>`:""}
+        ${T?`<span><i class="swatch" style="background:#c084fc"></i> T (趨勢·實驗)</span>`:""}</div></div>
       ${fwdChart([
         {label:"A",color:"var(--gain)",curve:A?A.equity_curve:[]},
-        {label:"B",color:"var(--accent2)",dash:"4 3",curve:(B&&B.equity_curve)?B.equity_curve:[]},
         ...(N&&N.equity_curve?[{label:"N",color:"var(--warn)",dash:"2 2",curve:N.equity_curve}]:[]),
-        {label:"A+B",color:"var(--accent)",curve:(()=>{const ac=A?A.equity_curve:[],bc=(B&&B.equity_curve)?B.equity_curve:[];
-          const ds=[...new Set([...ac,...bc].map(p=>p.date))].sort();let la=cap/2,lb=cap/2;
-          return ds.map(d=>{la=(ac.find(p=>p.date===d)||{}).equity??la;lb=(bc.find(p=>p.date===d)||{}).equity??lb;
-            return {date:d,equity:Math.round(la+lb)};});})()}
+        ...(T&&T.equity_curve?[{label:"T",color:"#c084fc",dash:"6 3",curve:T.equity_curve}]:[]),
       ])}</div>`;
 
   // ---------- Strategy A book (V6 / V7 switchable) ----------
@@ -810,28 +801,7 @@ async function loadLive(){
   }
   html+=`</div>`;
 
-  // ---------- Strategy B book ----------
-  html+=`<div class="panel mt"><div class="eyebrow" style="margin-bottom:10px">Strategy B — Trend Join Long day-trades (paper)</div>`;
-  if(B&&(bTr.length+B.open.length)>0){
-    if(B.open.length)
-      html+=`<div class="tbl-wrap" style="border:none"><table style="min-width:600px">
-        <thead><tr><th style="text-align:left">Ticker</th><th>Entry Time</th><th>Entry $</th><th>現價</th><th>賺蝕</th><th>Stop $</th><th>Shares</th></tr></thead>
-        <tbody>${B.open.map(t=>{const q=px(t.symbol),up=q!=null?(q-t.entry)*t.shares:null;
-          return `<tr><td class="tk" style="text-align:left">${esc(t.symbol)}</td>
-          <td>${esc(t.entry_time)} ET</td><td>$${t.entry}</td><td>${q!=null?"$"+q:dash}</td>
-          <td class="${up!=null?cls(up):''}">${up!=null?fmtUsdS(up):dash}</td>
-          <td class="neg">$${t.stop}</td><td>${t.shares}</td></tr>`;}).join("")}</tbody></table></div>`;
-    if(bTr.length)
-      html+=`<div class="trades-scroll" style="margin-top:10px"><table style="min-width:560px">
-        <thead><tr><th style="text-align:left">Date</th><th style="text-align:left">Ticker</th><th>Entry $</th><th>Exit $</th><th>Shares</th><th>P&L</th><th style="text-align:left">Exit</th></tr></thead>
-        <tbody>${[...bTr].reverse().map(t=>`<tr><td style="text-align:left">${esc(t.date)}</td>
-          <td class="tk" style="text-align:left">${esc(t.symbol)}</td><td>$${t.entry}</td><td>$${t.exit}</td>
-          <td>${t.shares}</td><td class="${cls(t.pnl)}">${fmtUsdS(t.pnl)}</td>
-          <td style="text-align:left"><span class="rz ${t.reason==='stop'?'stop_loss':'eod_close'}">${esc(t.reason)}</span></td></tr>`).join("")}</tbody></table></div>`;
-  }else{
-    html+=`<div class="small muted">No day-trades yet — B only fires when a qualifying gapper breaks out (~0-3/week on this pool). Test: <b style="color:var(--text)">python main.py scan-tjl --force</b></div>`;
-  }
-  html+=`</div>`;
+  // ---------- Strategy B RETIRED — replaced by B2 (Opening Range Breakout, in R&D) ----------
 
   // ---------- realised correlation monitor (the live test of the JGF thesis) --
   function realisedCorrPanel(bkA, bkN){
@@ -881,27 +851,25 @@ async function loadLive(){
     html+=realisedCorrPanel(L.paper_a, N);
   }
 
-  if(tjl){
-    html+=`<div class="panel mt"><div class="eyebrow" style="margin-bottom:6px">Latest TJL Scan</div>
-      <div class="sect-sub" style="margin-bottom:10px">${esc(tjl.scanned_at||"")}</div>`;
-    html+= tjl.hits&&tjl.hits.length
-      ? `<div class="sug-cards">${tjl.hits.map(h=>`<div class="sug"><div class="top"><div><div class="tkr">${esc(h.symbol)}</div>
-          <div class="px">${fmtUsd(h.price)}</div></div><span class="pill buy">BREAKOUT</span></div>
-          <div class="why">gap +${h.gap_pct}% · PMH $${h.pmh} · prev-high $${h.prev_high}</div></div>`).join("")}</div>`
-      : `<div class="small muted">No hits in the latest run.</div>`;
-    html+=`</div>`;
+  // ---------- Strategy T book (cross-asset trend / crisis alpha) ----------
+  if(T){
+    const tEq=T.equity_curve?.at(-1)?.equity??T.equity??cap/2, tPnl=tEq-(T.start_capital??cap/2);
+    const tw=T.weights||{};
+    const longs=Object.entries(tw).filter(([k,v])=>v>0), shorts=Object.entries(tw).filter(([k,v])=>v<0);
+    const chip=(k,v)=>`<span class="tk" style="padding:4px 9px;border:1px solid ${v>0?'var(--grid)':'var(--loss)'};border-radius:6px;font-size:12px;${v<0?'color:var(--loss)':''}">${esc(k)} ${(v*100).toFixed(0)}%</span>`;
+    html+=`<div class="panel mt" style="border-left:3px solid #c084fc">
+      <div class="eyebrow" style="margin-bottom:4px">🌊 Strategy T — 跨資產趨勢（危機保險 · 實驗）</div>
+      <div class="sect-sub" style="margin-bottom:12px">9 隻 ETF（股/債/金/商品/美元）time-series momentum：升勢做多、跌勢做空。
+      2022 backtest +6.9%（SPY −18%）、對 V6 相關 −0.06。角色 = 危機 alpha：牛市陰蝕係保費，持續跌市先發揮。<b>實驗中，未落真錢。</b></div>
+      <div class="stats" style="grid-template-columns:repeat(3,1fr);margin-bottom:12px">
+        <div class="stat"><div class="k">T 戶口</div><div class="v">${fmtUsd(tEq)}</div><div class="s ${cls(tPnl)}">${fmtUsdS(tPnl)}</div></div>
+        <div class="stat"><div class="k">持倉</div><div class="v" style="font-size:15px">${longs.length} 多 · ${shorts.length} 空</div><div class="s">每週調倉 · inverse-vol</div></div>
+        <div class="stat"><div class="k">角色</div><div class="v" style="font-size:15px">危機保險</div><div class="s">同 V6 相關 ≈ −0.06</div></div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">${longs.map(([k,v])=>chip(k,v)).join("")}${shorts.map(([k,v])=>chip(k,v)).join("")}</div>
+    </div>`;
   }
-  if(pm){
-    html+=`<div class="panel mt"><div class="eyebrow" style="margin-bottom:6px">Premarket Gappers (Scanner A)</div>
-      <div class="sect-sub" style="margin-bottom:10px">${esc(pm.scanned_at||"")}</div>`;
-    html+= pm.gappers&&pm.gappers.length
-      ? `<div class="tbl-wrap" style="border:none"><table style="min-width:420px">
-         <thead><tr><th style="text-align:left">Ticker</th><th>Price</th><th>Gap</th><th>PM Volume</th></tr></thead>
-         <tbody>${pm.gappers.map(g=>`<tr><td class="tk" style="text-align:left">${esc(g.symbol)}</td>
-           <td>$${g.price}</td><td class="pos">+${g.gap_pct}%</td><td>${g.pm_volume.toLocaleString()}</td></tr>`).join("")}</tbody></table></div>`
-      : `<div class="small muted">No qualifying gappers today.</div>`;
-    html+=`</div>`;
-  }
+
   el.innerHTML=html;
   // wire the V6/V7 toggle — switch variant and re-render (cheap: re-reads JSON)
   $$("#aVarToggle .segbtn").forEach(b=>b.onclick=()=>{
