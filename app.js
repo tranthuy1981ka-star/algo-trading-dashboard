@@ -833,6 +833,30 @@ async function loadLive(){
   }
   html+=`</div>`;
 
+  // ---------- realised correlation monitor (the live test of the JGF thesis) --
+  function realisedCorrPanel(bkA, bkN){
+    const rets=ec=>{const m={}; if(!ec) return m;
+      for(let i=1;i<ec.length;i++) m[ec[i].date]=ec[i].equity/ec[i-1].equity-1; return m;};
+    const rA=rets(bkA&&bkA.equity_curve), rN=rets(bkN&&bkN.equity_curve);
+    const common=Object.keys(rA).filter(d=>d in rN).sort();
+    if(common.length<10)
+      return `<div class="panel mt"><div class="eyebrow">🔬 實盤相關監察 — N vs V6</div>
+        <div class="small muted" style="margin-top:6px">呢個 panel 監察緊成個 multi-strat 實驗嘅核心假設：N 同 V6 嘅實盤日回報相關應該 ≈ 0（backtest 話係）。
+        依家儲緊數據：<b style="color:var(--text)">${common.length}/10</b> 個共同交易日，夠 10 日就開始顯示。</div></div>`;
+    const xs=common.map(d=>rA[d]), ys=common.map(d=>rN[d]);
+    const mean=a=>a.reduce((s,x)=>s+x,0)/a.length, mx=mean(xs), my=mean(ys);
+    let num=0,dx=0,dy=0;
+    for(let i=0;i<xs.length;i++){num+=(xs[i]-mx)*(ys[i]-my);dx+=(xs[i]-mx)**2;dy+=(ys[i]-my)**2;}
+    const corr=num/Math.sqrt((dx*dy)||1);
+    const col=Math.abs(corr)<0.3?"var(--gain)":Math.abs(corr)<0.6?"var(--warn)":"var(--loss)";
+    const verdict=Math.abs(corr)<0.3?"真分散 ✓（JGF 效應成立中）":Math.abs(corr)<0.6?"半分散 — 繼續觀察":"假分散 ✗ — 同 V6 一齊上落";
+    return `<div class="panel mt"><div class="eyebrow">🔬 實盤相關監察 — N vs V6</div>
+      <div style="display:flex;align-items:baseline;gap:14px;margin:8px 0">
+        <span style="font-size:28px;font-weight:700;color:${col}">${corr.toFixed(2)}</span>
+        <span class="small" style="color:${col}">${verdict}</span></div>
+      <div class="small muted">${common.length} 個共同實盤交易日 · backtest 預期 ≈ 0.00 · |corr|<0.3 = 綠</div></div>`;
+  }
+
   // ---------- Strategy N book (market-neutral experiment) ----------
   if(N){
     const nEq=N.equity_curve?.at(-1)?.equity??N.equity??cap/2, nPnl=nEq-(N.start_capital??cap/2);
@@ -854,6 +878,7 @@ async function loadLive(){
     if(lastReb)
       html+=`<div class="small muted">最近換倉 ${esc(lastReb.date)}${lastReb.added?.length?" · 新增 "+lastReb.added.join("、"):""}${lastReb.removed?.length?" · 剔除 "+lastReb.removed.join("、"):""}</div>`;
     html+=`</div>`;
+    html+=realisedCorrPanel(L.paper_a, N);
   }
 
   if(tjl){
