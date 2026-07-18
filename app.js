@@ -903,6 +903,38 @@ async function loadLive(){
     html+=`</div>`;
   }
 
+  // ---------- Strategy O book (sell-put income, weekly) ----------
+  const O=L.paper_o;
+  if(O){
+    const oStart=O.start_capital??100000, oReal=O.realized??0, oEq=oStart+oReal;
+    const oTr=O.trades||[], oWins=oTr.filter(t=>t.pnl>0).length;
+    const margin=(O.open||[]).reduce((s,p)=>s+p.K*100,0);
+    html+=`<div class="panel mt" style="border-left:3px solid var(--gain)">
+      <div class="eyebrow" style="margin-bottom:4px">💰 Strategy O — Sell-Put 收租（每週 · 實驗）</div>
+      <div class="sect-sub" style="margin-bottom:12px">Mega-cap 30-delta put · 避財報 · SPY>200天線先開倉 · 50%利潤/21DTE 平倉。
+      7年真期權數據回測：年化 ~+12.3%（對按金）、PF 1.47、2022 受控。<b>名義按金 100k 追蹤實驗，未落真錢。</b></div>
+      <div class="stats" style="grid-template-columns:repeat(3,1fr);margin-bottom:12px">
+        <div class="stat"><div class="k">O 戶口（名義 100k）</div><div class="v">${fmtUsd(oEq)}</div><div class="s ${cls(oReal)}">${fmtUsdS(oReal)}</div></div>
+        <div class="stat"><div class="k">持倉</div><div class="v" style="font-size:15px">${(O.open||[]).length} 張 put</div><div class="s">按金 ${fmtUsd(margin)}</div></div>
+        <div class="stat"><div class="k">累計</div><div class="v" style="font-size:15px">${oTr.length?(oWins/oTr.length*100).toFixed(0)+"% 勝":"—"}</div><div class="s">${oTr.length} 張已平</div></div>
+      </div>`;
+    if(O.open&&O.open.length)
+      html+=`<div class="tbl-wrap" style="border:none"><table style="min-width:560px">
+        <thead><tr><th style="text-align:left">股票</th><th>行使價</th><th>到期</th><th>收取權利金</th><th>delta</th><th>開倉日</th></tr></thead>
+        <tbody>${O.open.map(p=>`<tr><td class="tk" style="text-align:left">${esc(p.tk)}</td>
+          <td>$${p.K}</td><td>${esc(p.expiry)}</td><td class="pos">$${(p.prem*100).toFixed(0)}</td>
+          <td>${p.delta??dash}</td><td>${esc(p.entry_date)}</td></tr>`).join("")}</tbody></table></div>`;
+    else
+      html+=`<div class="small muted">未有持倉 — 逢週三（美股時段）自動揀 30-delta put 開倉（避財報、大市閘通過先開）。</div>`;
+    if(oTr.length)
+      html+=`<div class="trades-scroll" style="margin-top:10px"><table style="min-width:560px">
+        <thead><tr><th style="text-align:left">日期</th><th style="text-align:left">合約</th><th>P&L</th><th style="text-align:left">平倉方式</th></tr></thead>
+        <tbody>${[...oTr].reverse().slice(0,20).map(t=>`<tr><td style="text-align:left">${esc(t.date)}</td>
+          <td class="tk" style="text-align:left">${esc(t.tk)} ${t.K}P ${esc(t.expiry)}</td>
+          <td class="${cls(t.pnl)}">${fmtUsdS(t.pnl)}</td><td style="text-align:left">${esc(t.exit||"")}</td></tr>`).join("")}</tbody></table></div>`;
+    html+=`</div>`;
+  }
+
   el.innerHTML=html;
   // wire the V6/V7 toggle — switch variant and re-render (cheap: re-reads JSON)
   $$("#aVarToggle .segbtn").forEach(b=>b.onclick=()=>{
