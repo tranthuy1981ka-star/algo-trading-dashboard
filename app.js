@@ -903,6 +903,30 @@ async function loadLive(){
     html+=`</div>`;
   }
 
+  // ---------- Sleeve Q: the unified FUND NAV (headline panel) ----------
+  const QF=L.paper_q;
+  if(QF){
+    const qNom=QF.nominal??100000, qEq=QF.equity??qNom, qPnl=qEq-qNom;
+    const qEc=QF.equity_curve||[];
+    const qPeak=qEc.reduce((m,p)=>Math.max(m,p.equity),qNom);
+    const qDD=qPeak>0?(qEq/qPeak-1)*100:0;
+    const contrib=QF.contrib||{};
+    html+=`<div class="panel mt" style="border:2px solid var(--accent);background:var(--accent-dim)">
+      <div class="card-head"><div>
+        <div class="eyebrow" style="color:var(--accent)">🏦 SLEEVE Q — 你隻 Quant Fund（統一 NAV · 實驗）</div>
+        <div class="sect-sub">全部 sleeve + 資產腿按熊市優化權重合成一條 NAV。配方（${esc(QF.mode||"defensive")}）：
+        含2022回測 = CAGR 12.5% · DD 4.1% · Sharpe 1.48 · 2022 +0.1%；正常年景 15-18%。<b>紙上驗證中。</b></div></div></div>
+      <div class="stats" style="grid-template-columns:repeat(4,1fr);margin-top:10px">
+        <div class="stat"><div class="k">基金 NAV</div><div class="v">${fmtUsd(qEq)}</div><div class="s">名義 ${fmtUsd(qNom)}</div></div>
+        <div class="stat"><div class="k">總回報</div><div class="v ${cls(qPnl)}">${fmtUsdS(qPnl)}</div><div class="s ${cls(qPnl)}">${pctSigned(qPnl/qNom)}</div></div>
+        <div class="stat"><div class="k">現時回撤</div><div class="v ${qDD<-3?'neg':''}">${qDD.toFixed(1)}%</div><div class="s">目標 ≤5%</div></div>
+        <div class="stat"><div class="k">實盤日數</div><div class="v">${qEc.length}</div><div class="s">每晚自動合成</div></div>
+      </div>
+      ${qEc.length>=2?fwdChart([{label:"Q",color:"var(--accent)",curve:qEc}],{height:180}):`<div class="small muted" style="margin-top:8px">NAV 曲線儲緊數據（要 2 日+）。</div>`}
+      ${Object.keys(contrib).length?`<div class="small muted" style="margin-top:8px">最近一日貢獻(bps)：${Object.entries(contrib).filter(([k,v])=>Math.abs(v)>=0.5).map(([k,v])=>`${esc(k)} <b class="${cls(v)}">${v>0?"+":""}${v.toFixed(0)}</b>`).join(" · ")}</div>`:""}
+    </div>`;
+  }
+
   // ---------- Strategy O book (sell-put income, weekly) ----------
   const O=L.paper_o;
   if(O){
