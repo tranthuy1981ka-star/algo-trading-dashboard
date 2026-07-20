@@ -729,6 +729,12 @@ async function loadLive(){
   const bLive=(B&&B.open&&B.open.length)
     ?Math.round(((B.equity??cap/2)+B.open.reduce((s,t)=>s+((px(t.symbol)??t.entry)-t.entry)*t.shares,0))*100)/100:null;
   const qAsof=Object.keys(Q).length?(L.published_at||("ET "+L.now_et)):null;
+  // ---- 色彩分類系統：藍=單一策略 · 金=組合(multi-strat) ----
+  const KC={single:"#38bdf8",multi:"#fbbf24"};
+  const badge=k=>`<span style="font-size:10px;font-weight:700;letter-spacing:.5px;padding:2px 8px;border-radius:10px;background:${KC[k]}22;color:${KC[k]};border:1px solid ${KC[k]}55;vertical-align:middle;margin-left:8px">${k==="single"?"SINGLE":"MULTI"}</span>`;
+  const btfwd=(bt,eq,start)=>`<div class="small" style="margin:4px 0 10px;display:flex;gap:16px;flex-wrap:wrap">
+    <span class="muted">📊 回測: ${bt}</span>
+    <span>🔴 實盤: <b class="${cls(eq-start)}">${fmtUsdS(eq-start)}（${((eq/start-1)*100).toFixed(1)}%）</b></span></div>`;
   const aEq=aLive??(A?A.equity_curve.at(-1)?.equity??A.cash:cap/2);
   const bEq=bLive??(B?(B.equity??cap/2):cap/2);
   const total=aEq+bEq, totPnl=total-cap;
@@ -739,7 +745,11 @@ async function loadLive(){
     <div class="bv" style="color:var(--accent);font-size:18px">FWD</div>
     <div class="bt"><b>Forward Test — 多 sleeve 實盤紙上交易</b>（started 2026-07-13）。
     ET now: <b>${esc(L.now_et)}</b>。A（波段）每日跑；N（市場中性）、T（跨資產趨勢）係實驗 sleeve。所有成交 WhatsApp 通知。
-    <br><span class="small muted">Strategy B（日內 TJL）3年真數據證實只係邊緣貨，已下架；B2（Opening Range Breakout）研發中。</span></div></div>
+    <br><span class="small muted">Strategy B（日內 TJL）已下架，由 B2（ORB）取代。</span>
+    <br><span class="small" style="margin-top:4px;display:inline-block">
+      <span style="color:#38bdf8;font-weight:700">■ 藍 = 單一策略</span>（A/N/T/B2/O，各自獨立 alpha）
+      <span style="color:#fbbf24;font-weight:700">■ 金 = 組合 Multi-Strat</span>（Q，統一基金 NAV）
+      每個 panel 都有「📊 回測 vs 🔴 實盤」對照。</span></div></div>
     <div class="stats" style="grid-template-columns:repeat(4,1fr)">
       <div class="stat"><div class="k">A 戶口（主·${esc(aName.split(" ")[0])}）${aLive!=null?" ⚡":""}</div><div class="v">${fmtUsd(aEq)}</div><div class="s ${cls(aEq-cap/2)}">${fmtUsdS(aEq-cap/2)}${aLive!=null?" · 市價估值":""}</div></div>
       <div class="stat"><div class="k">A 持倉</div><div class="v" style="font-size:16px">${A?A.open.length+" 隻":"—"}</div><div class="s">${A?aTr.length+" 已平倉":""}</div></div>
@@ -764,12 +774,13 @@ async function loadLive(){
       style="padding:5px 12px;border:1px solid var(--grid);background:${_aVar===v?'var(--accent)':'transparent'};
       color:${_aVar===v?'#fff':'var(--text)'};cursor:pointer;font-size:12px;border-radius:6px">
       ${label}${note?` <span style="opacity:.7">${note}</span>`:''}</button>`;
-  html+=`<div class="panel mt"><div class="card-head"><div>
-      <div class="eyebrow" style="margin-bottom:6px">Strategy A — ${esc(aName)} (paper)</div>
+  html+=`<div class="panel mt" style="border-left:3px solid ${KC.single}"><div class="card-head"><div>
+      <div class="eyebrow" style="margin-bottom:6px">Strategy A — ${esc(aName)} (paper)${badge("single")}</div>
       <div class="sect-sub">Both variants run in parallel on the same signals; V7 adds a short-SPY hedge (0.5× exposure).
       <b>V7 is the primary</b> — the one to deploy to IB paper. Switch to compare →</div></div>
       <div id="aVarToggle" style="display:flex;gap:6px;align-items:center">
         ${segBtn("v6","V6","long-only")}${segBtn("v7","V7","hedged ★")}</div></div>`;
+  html+=btfwd(aV7?"CAGR +64% · Sharpe 2.00 · DD 15.9% · 2022 −11.3%":"CAGR +68% · Sharpe 2.04 · DD 14.4% · 2022 −18.1%", aEq, cap/2);
   if(hedgePnl!=null)
     html+=`<div class="eyebrow" style="margin:2px 0 10px;color:${hedgePnl>=0?'var(--gain)':'var(--loss)'}">
       🛡️ 對沖 leg 累計 P&L: ${fmtUsdS(hedgePnl)}（做空 SPY，抵銷大市方向）</div>`;
@@ -833,10 +844,11 @@ async function loadLive(){
   if(N){
     const nEq=N.equity_curve?.at(-1)?.equity??N.equity??cap/2, nPnl=nEq-(N.start_capital??cap/2);
     const lastReb=(N.rebalances||[]).at(-1);
-    html+=`<div class="panel mt" style="border-left:3px solid var(--warn)">
-      <div class="eyebrow" style="margin-bottom:4px">🧬 Strategy N — Market-Neutral（實驗 · 一個月試跑）</div>
+    html+=`<div class="panel mt" style="border-left:3px solid ${KC.single}">
+      <div class="eyebrow" style="margin-bottom:4px">🧬 Strategy N — Market-Neutral（實驗 · 一個月試跑）${badge("single")}</div>
       <div class="sect-sub" style="margin-bottom:12px">做多 top-8 高分股（等權）− 沽 SPY 對沖 → 唔賭大市方向，只賭選股相對強弱。
       研究顯示同 V6 相關 ≈ 0，溝落組合可提升 Sharpe。<b>實驗中，未落真錢。</b></div>
+      ${btfwd("Sharpe 1.33（週調倉）· 對V6相關 ≈0.00（逐年）", nEq, N.start_capital??cap/2)}
       <div class="stats" style="grid-template-columns:repeat(3,1fr);margin-bottom:12px">
         <div class="stat"><div class="k">N 戶口（市場中性）</div><div class="v">${fmtUsd(nEq)}</div><div class="s ${cls(nPnl)}">${fmtUsdS(nPnl)}</div></div>
         <div class="stat"><div class="k">持倉</div><div class="v" style="font-size:15px">${(N.longs||[]).length} 隻等權</div><div class="s">每週換倉</div></div>
@@ -859,10 +871,11 @@ async function loadLive(){
     const tw=T.weights||{};
     const longs=Object.entries(tw).filter(([k,v])=>v>0), shorts=Object.entries(tw).filter(([k,v])=>v<0);
     const chip=(k,v)=>`<span class="tk" style="padding:4px 9px;border:1px solid ${v>0?'var(--grid)':'var(--loss)'};border-radius:6px;font-size:12px;${v<0?'color:var(--loss)':''}">${esc(k)} ${(v*100).toFixed(0)}%</span>`;
-    html+=`<div class="panel mt" style="border-left:3px solid #c084fc">
-      <div class="eyebrow" style="margin-bottom:4px">🌊 Strategy T — 跨資產趨勢（危機保險 · 實驗）</div>
+    html+=`<div class="panel mt" style="border-left:3px solid ${KC.single}">
+      <div class="eyebrow" style="margin-bottom:4px">🌊 Strategy T — 跨資產趨勢（危機保險 · 實驗）${badge("single")}</div>
       <div class="sect-sub" style="margin-bottom:12px">9 隻 ETF（股/債/金/商品/美元）time-series momentum：升勢做多、跌勢做空。
       2022 backtest +6.9%（SPY −18%）、對 V6 相關 −0.06。角色 = 危機 alpha：牛市陰蝕係保費，持續跌市先發揮。<b>實驗中，未落真錢。</b></div>
+      ${btfwd("2022 +6.9%（SPY −18%）· 對V6 −0.06 · SPY最差5%日 +0.06%/日", tEq, T.start_capital??cap/2)}
       <div class="stats" style="grid-template-columns:repeat(3,1fr);margin-bottom:12px">
         <div class="stat"><div class="k">T 戶口</div><div class="v">${fmtUsd(tEq)}</div><div class="s ${cls(tPnl)}">${fmtUsdS(tPnl)}</div></div>
         <div class="stat"><div class="k">持倉</div><div class="v" style="font-size:15px">${longs.length} 多 · ${shorts.length} 空</div><div class="s">每週調倉 · inverse-vol</div></div>
@@ -877,10 +890,11 @@ async function loadLive(){
   if(B2){
     const b2Eq=B2.equity_curve?.at(-1)?.equity??B2.equity??cap/2, b2Pnl=b2Eq-(B2.start_capital??cap/2);
     const b2Tr=B2.trades||[], b2Wins=b2Tr.filter(t=>t.pnl>0).length;
-    html+=`<div class="panel mt" style="border-left:3px solid var(--accent2)">
-      <div class="eyebrow" style="margin-bottom:4px">⚡ Strategy B2 — Opening Range Breakout（5分鐘日內）</div>
+    html+=`<div class="panel mt" style="border-left:3px solid ${KC.single}">
+      <div class="eyebrow" style="margin-bottom:4px">⚡ Strategy B2 — Opening Range Breakout（5分鐘日內）${badge("single")}</div>
       <div class="sect-sub" style="margin-bottom:12px">高beta movers · 只交易「相對成交量≥3x」嘅 in-play 股 · 突破開市首5分鐘高位做多 · 2R目標 · 收市必平。
       3年5分鐘真數據回測 PF 1.27、3/4年正、~4單/週。<b>取代已下架嘅日內 B，實盤驗證中。</b></div>
+      ${btfwd("CAGR +18.9% · Sharpe 0.97 · DD 13.6% · 對其他sleeve相關<0.15", b2Eq, B2.start_capital??cap/2)}
       <div class="stats" style="grid-template-columns:repeat(3,1fr);margin-bottom:12px">
         <div class="stat"><div class="k">B2 戶口</div><div class="v">${fmtUsd(b2Eq)}</div><div class="s ${cls(b2Pnl)}">${fmtUsdS(b2Pnl)}</div></div>
         <div class="stat"><div class="k">持倉</div><div class="v" style="font-size:15px">${B2.open?.length||0} 隻</div><div class="s">日內·收市平</div></div>
@@ -911,11 +925,12 @@ async function loadLive(){
     const qPeak=qEc.reduce((m,p)=>Math.max(m,p.equity),qNom);
     const qDD=qPeak>0?(qEq/qPeak-1)*100:0;
     const contrib=QF.contrib||{};
-    html+=`<div class="panel mt" style="border:2px solid var(--accent);background:var(--accent-dim)">
+    html+=`<div class="panel mt" style="border:2px solid ${KC.multi};background:${KC.multi}11">
       <div class="card-head"><div>
-        <div class="eyebrow" style="color:var(--accent)">🏦 SLEEVE Q — 你隻 Quant Fund（統一 NAV · 實驗）</div>
+        <div class="eyebrow" style="color:${KC.multi}">🏦 SLEEVE Q — 你隻 Quant Fund（統一 NAV · 實驗）${badge("multi")}</div>
         <div class="sect-sub">全部 sleeve + 資產腿按熊市優化權重合成一條 NAV。配方（${esc(QF.mode||"defensive")}）：
         含2022回測 = CAGR 12.5% · DD 4.1% · Sharpe 1.48 · 2022 +0.1%；正常年景 15-18%。<b>紙上驗證中。</b></div></div></div>
+      ${btfwd("CAGR 12.5% · Sharpe 1.48 · DD 4.1% · 2022 +0.1%（含熊市優化）", qEq, qNom)}
       <div class="stats" style="grid-template-columns:repeat(4,1fr);margin-top:10px">
         <div class="stat"><div class="k">基金 NAV</div><div class="v">${fmtUsd(qEq)}</div><div class="s">名義 ${fmtUsd(qNom)}</div></div>
         <div class="stat"><div class="k">總回報</div><div class="v ${cls(qPnl)}">${fmtUsdS(qPnl)}</div><div class="s ${cls(qPnl)}">${pctSigned(qPnl/qNom)}</div></div>
@@ -933,10 +948,11 @@ async function loadLive(){
     const oStart=O.start_capital??100000, oReal=O.realized??0, oEq=oStart+oReal;
     const oTr=O.trades||[], oWins=oTr.filter(t=>t.pnl>0).length;
     const margin=(O.open||[]).reduce((s,p)=>s+p.K*100,0);
-    html+=`<div class="panel mt" style="border-left:3px solid var(--gain)">
-      <div class="eyebrow" style="margin-bottom:4px">💰 Strategy O — Sell-Put 收租（每週 · 實驗）</div>
+    html+=`<div class="panel mt" style="border-left:3px solid ${KC.single}">
+      <div class="eyebrow" style="margin-bottom:4px">💰 Strategy O — Sell-Put 收租（每週 · 實驗）${badge("single")}</div>
       <div class="sect-sub" style="margin-bottom:12px">Mega-cap 30-delta put · 避財報 · SPY>200天線先開倉 · 50%利潤/21DTE 平倉。
       7年真期權數據回測：年化 ~+12.3%（對按金）、PF 1.47、2022 受控。<b>名義按金 100k 追蹤實驗，未落真錢。</b></div>
+      ${btfwd("年化 +12.3%（按金）· PF 1.47 · 77%勝 · 2022 −17.8k（受控）", oEq, oStart)}
       <div class="stats" style="grid-template-columns:repeat(3,1fr);margin-bottom:12px">
         <div class="stat"><div class="k">O 戶口（名義 100k）</div><div class="v">${fmtUsd(oEq)}</div><div class="s ${cls(oReal)}">${fmtUsdS(oReal)}</div></div>
         <div class="stat"><div class="k">持倉</div><div class="v" style="font-size:15px">${(O.open||[]).length} 張 put</div><div class="s">按金 ${fmtUsd(margin)}</div></div>
