@@ -929,12 +929,16 @@ async function loadLive(){
       <div class="card-head"><div>
         <div class="eyebrow" style="color:${KC.multi}">🏦 SLEEVE Q — 你隻 Quant Fund（統一 NAV · 實驗）${badge("multi")}</div>
         <div class="sect-sub">全部 sleeve + 資產腿按熊市優化權重合成一條 NAV。配方（${esc(QF.mode||"defensive")}）：
-        含2022回測 = CAGR 12.5% · DD 4.1% · Sharpe 1.48 · 2022 +0.1%；正常年景 15-18%。<b>紙上驗證中。</b></div></div></div>
-      ${btfwd("CAGR 12.5% · Sharpe 1.48 · DD 4.1% · 2022 +0.1%（含熊市優化）", qEq, qNom)}
+        ${QF.mode==="growth"
+          ?`含2022回測 = CAGR <b>15.7%</b> · DD 7.0% · Sharpe 1.50 · 2022 −5.1%。核心引擎 A 佔 20%，接受較深回撤換增長。`
+          :`含2022回測 = CAGR 12.5% · DD 4.1% · Sharpe 1.48 · 2022 +0.1%；正常年景 15-18%。`}<b>紙上驗證中。</b></div></div></div>
+      ${btfwd(QF.mode==="growth"
+          ?"CAGR 15.7% · Sharpe 1.50 · DD 7.0% · 2022 −5.1%（growth 配方）"
+          :"CAGR 12.5% · Sharpe 1.48 · DD 4.1% · 2022 +0.1%（defensive 配方）", qEq, qNom)}
       <div class="stats" style="grid-template-columns:repeat(4,1fr);margin-top:10px">
         <div class="stat"><div class="k">基金 NAV</div><div class="v">${fmtUsd(qEq)}</div><div class="s">名義 ${fmtUsd(qNom)}</div></div>
         <div class="stat"><div class="k">總回報</div><div class="v ${cls(qPnl)}">${fmtUsdS(qPnl)}</div><div class="s ${cls(qPnl)}">${pctSigned(qPnl/qNom)}</div></div>
-        <div class="stat"><div class="k">現時回撤</div><div class="v ${qDD<-3?'neg':''}">${qDD.toFixed(1)}%</div><div class="s">目標 ≤5%</div></div>
+        <div class="stat"><div class="k">現時回撤</div><div class="v ${qDD<(QF.mode==="growth"?-5:-3)?'neg':''}">${qDD.toFixed(1)}%</div><div class="s">目標 ≤${QF.mode==="growth"?"7":"5"}%</div></div>
         <div class="stat"><div class="k">實盤日數</div><div class="v">${qEc.length}</div><div class="s">每晚自動合成</div></div>
       </div>
       ${qEc.length>=2?fwdChart([{label:"Q",color:"var(--accent)",curve:qEc}],{height:180}):`<div class="small muted" style="margin-top:8px">NAV 曲線儲緊數據（要 2 日+）。</div>`}
